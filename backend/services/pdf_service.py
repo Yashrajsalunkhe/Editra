@@ -169,6 +169,67 @@ class PDFService:
         finally:
             doc.close()
 
+    def get_page_data(self, page_num):
+        """
+        Get image and text data for a specific page.
+        
+        Args:
+            page_num: 1-based page number
+            
+        Returns:
+            dict: { image_base64, text_blocks, width, height }
+        """
+        filepath = self.current_file_path
+        if not filepath or not os.path.exists(filepath):
+            raise FileNotFoundError("No PDF file loaded")
+
+        doc = fitz.open(filepath)
+        try:
+            page_index = page_num - 1
+            if page_index < 0 or page_index >= doc.page_count:
+                raise ValueError(f"Page {page_num} out of range")
+
+            page = doc[page_index]
+            
+            # 1. Render page to image (high quality for clarity)
+            zoom = 1.5  # Scale up for better resolution
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=mat)
+            img_data = pix.tobytes("png")
+            
+            import base64
+            img_b64 = base64.b64encode(img_data).decode('utf-8')
+
+            # 2. Extract text blocks with coordinates
+            # "dict" format gives layout info: blocks -> lines -> spans -> bbox
+            raw_dict = page.get_text("dict")
+            
+            text_blocks = []
+            for block in raw_dict.get("blocks", []):
+                if block.get("type") == 0:  # Text block
+                    for line in block.get("lines", []):
+                        for span in line.get("spans", []):
+                            # Scale coordinates to match the image scale if necessary
+                            # But usually bboxes are in points, and we want to keep them consistent
+                            text_blocks.append({
+                                "text": span["text"],
+                                "bbox": span["bbox"],  # [x0, y0, x1, y1]
+                                "size": span["size"],
+                                "font": span["font"],
+                                "color": span["color"]
+                            })
+
+            return {
+                "image": f"data:image/png;base64,{img_b64}",
+                "blocks": text_blocks,
+                "width": page.rect.width,
+                "height": page.rect.height,
+                "page_count": doc.page_count
+            }
+
+        finally:
+            doc.close()
+
     def get_download_path(self):
         """
         Get the path to the current (possibly modified) PDF.

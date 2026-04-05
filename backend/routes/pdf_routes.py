@@ -113,6 +113,22 @@ def edit_pdf():
         return jsonify({'error': f'Edit failed: {str(e)}'}), 500
 
 
+@pdf_bp.route('/page_data/<int:page_num>', methods=['GET'])
+def get_page_data(page_num):
+    """
+    Get image and text block data for a specific page.
+    """
+    try:
+        result = pdf_service.get_page_data(page_num)
+        return jsonify(result), 200
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to load page data: {str(e)}'}), 500
+
+
 @pdf_bp.route('/download', methods=['GET'])
 def download_pdf():
     """
