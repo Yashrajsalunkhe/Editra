@@ -36,8 +36,8 @@ function EditorPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col p-4 md:p-8 lg:p-12">
-      <nav className="mb-8 flex flex-wrap items-center justify-between gap-4 bg-black text-white p-4 border-b-8 border-r-8 border-black">
+    <div className="min-h-screen flex flex-col p-4 md:p-8 lg:p-12 relative overflow-hidden bg-neo-bg">
+      <nav className="mb-8 flex flex-wrap items-center justify-between gap-4 bg-black text-white p-4 border-brutal shadow-brutal-lg z-10 relative">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/')}
@@ -57,12 +57,12 @@ function EditorPage() {
       </nav>
 
       {editStatus && (
-        <div className="mb-6 font-mono font-bold text-[10px] p-4 border-4 border-black bg-neo-yellow transform -rotate-1 animate-pulse self-start">
+        <div className="mb-6 font-mono font-bold text-[10px] p-4 border-brutal shadow-brutal bg-neo-yellow transform -rotate-1 animate-pulse self-start z-10 relative">
           &gt; [SYSTEM_LOG] {editStatus}
         </div>
       )}
 
-      <section className="neo-card bg-white flex-1 min-h-[78vh] flex flex-col overflow-hidden border-b-[16px]">
+      <section className="bg-white flex-1 min-h-[78vh] flex flex-col overflow-hidden border-brutal shadow-brutal-xl z-10 relative">
         <div className="bg-black text-white p-4 flex justify-between items-center border-b-4 border-black">
           <div className="flex gap-3">
             <div className="w-4 h-4 bg-neo-red border-2 border-white"></div>

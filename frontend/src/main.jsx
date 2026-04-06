@@ -8,10 +8,7 @@ import EditorPage from './EditorPage.jsx'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/editor" element={<EditorPage />} />
-      </Routes>
+      <App />
     </BrowserRouter>
   </StrictMode>,
 )
