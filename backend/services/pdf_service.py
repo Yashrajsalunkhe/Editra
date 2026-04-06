@@ -224,6 +224,8 @@ class PDFService:
                 "blocks": text_blocks,
                 "width": page.rect.width,
                 "height": page.rect.height,
+                "image_width": pix.width,
+                "image_height": pix.height,
                 "page_count": doc.page_count
             }
 

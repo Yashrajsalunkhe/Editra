@@ -4,6 +4,7 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
   const [pageData, setPageData] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [editingBlock, setEditingBlock] = useState(null);
   const [newText, setNewText] = useState('');
   const containerRef = useRef(null);
@@ -16,14 +17,20 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
 
   const loadPage = async (page) => {
     setLoading(true);
+    setError('');
     try {
       const response = await fetch(`http://localhost:5000/page_data/${page}`);
       const data = await response.json();
       if (response.ok) {
         setPageData(data);
+      } else {
+        setPageData(null);
+        setError(data.error || 'Unable to load PDF page');
       }
     } catch (err) {
       console.error("Failed to load page data:", err);
+      setPageData(null);
+      setError('Unable to reach backend service');
     } finally {
       setLoading(false);
     }
@@ -62,6 +69,17 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
   }
 
   if (loading || !pageData) {
+    if (error) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-neo-bg p-6">
+          <div className="max-w-lg text-center border-4 border-black bg-white p-6 shadow-neo-lg">
+            <h3 className="text-2xl font-black uppercase mb-3">VIEWPORT_ERROR</h3>
+            <p className="font-mono text-xs break-words">{error}</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full h-full flex items-center justify-center bg-neo-bg">
         <div className="text-2xl font-black animate-pulse uppercase">RECONSTRUCTING_PAGE...</div>
@@ -69,9 +87,10 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
     );
   }
 
-  // Calculate scale. The image is 1.5x zoom (points * 1.5).
-  // We need to map PDF points to pixels on the displayed image.
-  const scale = 1.5; 
+  const renderWidth = pageData.image_width || pageData.width;
+  const renderHeight = pageData.image_height || pageData.height;
+  const scaleX = renderWidth / pageData.width;
+  const scaleY = renderHeight / pageData.height;
 
   return (
     <div className="relative w-full h-full overflow-auto bg-neutral-300 p-4 flex flex-col items-center">
@@ -99,12 +118,12 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
       <div 
         ref={containerRef}
         className="relative border-4 border-black bg-white shadow-neo-lg"
-        style={{ width: pageData.width * scale, height: pageData.height * scale }}
+        style={{ width: renderWidth, height: renderHeight }}
       >
         <img 
           src={pageData.image} 
           alt={`Page ${currentPage}`}
-          className="absolute inset-0 w-full h-full select-none pointer-events-none"
+          className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
         />
         
         {/* Interaction Layer */}
@@ -114,10 +133,10 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
             onClick={() => handleBlockClick(block)}
             className="absolute border border-transparent hover:border-neo-pink hover:bg-neo-pink/10 cursor-text group"
             style={{
-              left: block.bbox[0] * scale,
-              top: block.bbox[1] * scale,
-              width: (block.bbox[2] - block.bbox[0]) * scale,
-              height: (block.bbox[3] - block.bbox[1]) * scale,
+              left: block.bbox[0] * scaleX,
+              top: block.bbox[1] * scaleY,
+              width: (block.bbox[2] - block.bbox[0]) * scaleX,
+              height: (block.bbox[3] - block.bbox[1]) * scaleY,
             }}
           >
             {/* Tooltip on hover */}
@@ -132,8 +151,8 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
           <div 
             className="absolute z-[100] bg-white border-4 border-black p-4 shadow-[8px_8px_0_0_#000] w-64"
             style={{
-              left: Math.min(editingBlock.bbox[0] * scale, pageData.width * scale - 260),
-              top: Math.min(editingBlock.bbox[1] * scale + 24, pageData.height * scale - 150),
+              left: Math.min(editingBlock.bbox[0] * scaleX, renderWidth - 260),
+              top: Math.min(editingBlock.bbox[1] * scaleY + 24, renderHeight - 150),
             }}
           >
             <h4 className="font-black uppercase text-[10px] mb-2 bg-neo-pink text-white px-2 py-1 inline-block">BUFFER_WRITE</h4>

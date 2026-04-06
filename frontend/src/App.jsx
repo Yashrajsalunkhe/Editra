@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import InteractivePdfViewer from './components/InteractivePdfViewer'
 
 function App() {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState('');
   const [pdfTimestamp, setPdfTimestamp] = useState(0);
@@ -33,7 +35,9 @@ function App() {
       
       if (response.ok) {
         setUploadStatus(`SYNC_SUCCESS: ${file.name}`);
-        setPdfTimestamp(Date.now());
+        const timestamp = Date.now();
+        setPdfTimestamp(timestamp);
+        navigate('/editor', { state: { timestamp } });
       } else {
         setUploadStatus(`SYNC_ERROR: ${data.error}`);
       }
