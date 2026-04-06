@@ -1,0 +1,64 @@
+# ------------------------------
+# Python / Flask backend
+# ------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.coverage
+.coverage.*
+htmlcov/
+
+# ------------------------------
+# Node / Vite frontend
+# ------------------------------
+node_modules/
+frontend/node_modules/
+
+# Build output
+build/
+dist/
+frontend/dist/
+frontend/dist-ssr/
+
+# Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------
+# Environment and local configs
+# ------------------------------
+.env
+.env.*
+*.local
+
+# ------------------------------
+# Uploads / generated runtime files
+# ------------------------------
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ------------------------------
+# OS / editor
+# ------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.tmp
