@@ -190,6 +190,70 @@ class PDFService:
     # ── helpers ────────────────────────────────────────────────────
 
     @staticmethod
+    def _detect_background_color(page, target_rect):
+        """
+        Detect the background color behind a text area by rendering the page
+        and sampling pixels at several points around the text rect edges.
+
+        Returns an (r, g, b) tuple with values in [0, 1].
+        """
+        try:
+            # Render at 1x scale (points == pixels)
+            pix = page.get_pixmap(matrix=fitz.Identity)
+
+            # Collect sample points around the edges of the rect
+            # We sample just outside and at the corners to avoid sampling the text itself
+            samples = []
+            rect = target_rect
+
+            # Sample points: corners, midpoints of edges, and a few pixels
+            # OUTSIDE the text area to catch the true background
+            offsets = [
+                # Just outside the rect edges (1-2 px away from text)
+                (rect.x0 - 2, rect.y0 + rect.height / 2),  # left edge outside
+                (rect.x1 + 2, rect.y0 + rect.height / 2),  # right edge outside
+                (rect.x0 + rect.width / 2, rect.y0 - 2),   # top edge outside
+                (rect.x0 + rect.width / 2, rect.y1 + 2),   # bottom edge outside
+                # Corners just outside
+                (rect.x0 - 1, rect.y0 - 1),
+                (rect.x1 + 1, rect.y0 - 1),
+                (rect.x0 - 1, rect.y1 + 1),
+                (rect.x1 + 1, rect.y1 + 1),
+                # Inside rect but at very edges (often background visible)
+                (rect.x0 + 1, rect.y0 + 1),
+                (rect.x1 - 1, rect.y0 + 1),
+                (rect.x0 + 1, rect.y1 - 1),
+                (rect.x1 - 1, rect.y1 - 1),
+            ]
+
+            for px, py in offsets:
+                # Clamp to pixmap bounds
+                ix = max(0, min(int(px), pix.width - 1))
+                iy = max(0, min(int(py), pix.height - 1))
+                pixel = pix.pixel(ix, iy)  # returns (r, g, b) or (r, g, b, a)
+                samples.append(pixel[:3])  # take only RGB
+
+            if not samples:
+                return (1, 1, 1)  # fallback to white
+
+            # Find the most common color among samples
+            # (this filters out text pixels that might have been sampled)
+            from collections import Counter
+            color_counts = Counter(samples)
+            most_common_rgb = color_counts.most_common(1)[0][0]
+
+            # Convert 0-255 to 0-1 range
+            return (
+                most_common_rgb[0] / 255.0,
+                most_common_rgb[1] / 255.0,
+                most_common_rgb[2] / 255.0,
+            )
+
+        except Exception:
+            # If anything fails, fall back to white
+            return (1, 1, 1)
+
+    @staticmethod
     def _extract_span_properties(page, target_rect, old_text):
         """
         Walk through the page's text dict and find the span(s)
@@ -315,11 +379,13 @@ class PDFService:
                 is_italic = bool(props["flags"] & (1 << 1))
                 props["font"] = _resolve_fontname(hint_font, is_bold, is_italic)
 
-            # ── Step 2: Redact the old text area ─────────────────
+            # ── Step 2: Detect background color & redact ─────────
+            bg_color = self._detect_background_color(page, target_rect)
+
             page.add_redact_annot(
                 target_rect,
                 text="",
-                fill=(1, 1, 1),  # White fill to match page background
+                fill=bg_color,  # Match actual background color
             )
             page.apply_redactions()
 
