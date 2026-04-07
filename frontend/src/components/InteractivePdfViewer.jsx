@@ -48,7 +48,11 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
         old_text: editingBlock.text,
         new_text: newText,
         x: editingBlock.bbox[0],
-        y: editingBlock.bbox[1]
+        y: editingBlock.bbox[1],
+        // Send original formatting hints so backend preserves them
+        hint_font: editingBlock.font || null,
+        hint_size: editingBlock.size || null,
+        hint_color: editingBlock.color != null ? editingBlock.color : null,
       });
       setEditingBlock(null);
     }

@@ -91,6 +91,11 @@ def edit_pdf():
     x = data.get('x')
     y = data.get('y')
 
+    # Optional formatting hints from the frontend
+    hint_font = data.get('hint_font')
+    hint_size = data.get('hint_size')
+    hint_color = data.get('hint_color')
+
     # Basic validation
     if not isinstance(page, int) or page < 1:
         return jsonify({'error': 'Page must be a positive integer'}), 400
@@ -102,7 +107,12 @@ def edit_pdf():
         return jsonify({'error': 'new_text cannot be empty'}), 400
 
     try:
-        result = pdf_service.edit_text(page, old_text, new_text, x, y)
+        result = pdf_service.edit_text(
+            page, old_text, new_text, x, y,
+            hint_font=hint_font,
+            hint_size=hint_size,
+            hint_color=hint_color,
+        )
         return jsonify(result), 200
 
     except FileNotFoundError as e:
