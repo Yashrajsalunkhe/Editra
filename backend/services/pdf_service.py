@@ -10,6 +10,8 @@ Handles all PDF manipulation operations:
 
 import fitz  # PyMuPDF
 import os
+import shutil
+import glob
 import base64
 
 # ────────────────────────────────────────────────────────────────────
@@ -133,6 +135,8 @@ def _int_color_to_rgb(color_int: int) -> tuple:
 class PDFService:
     """Service class for PDF text editing operations."""
 
+    MAX_HISTORY = 50  # Maximum number of undo snapshots
+
     def __init__(self, upload_dir='uploads'):
         """
         Initialize the PDF service.
@@ -143,6 +147,13 @@ class PDFService:
         self.upload_dir = upload_dir
         os.makedirs(upload_dir, exist_ok=True)
         self._current_file = None
+
+        # ── Undo/Redo history ─────────────────────────────────
+        # _history stores file paths to snapshot copies
+        # _history_pointer points to the current state index
+        # When pointer < len(history)-1, redo is available
+        self._history = []        # list of snapshot file paths
+        self._history_pointer = -1  # current position in history
 
     @property
     def current_file_path(self):
@@ -185,7 +196,146 @@ class PDFService:
             raise ValueError("Invalid PDF file")
 
         self._current_file = filename
+
+        # Clear undo/redo history on new upload
+        self._clear_history()
+
         return filename
+
+    # ── undo / redo ───────────────────────────────────────────────
+
+    def _clear_history(self):
+        """Remove all snapshot files and reset history state."""
+        for path in self._history:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+        # Also clean up any leftover snapshot files
+        pattern = os.path.join(self.upload_dir, 'snapshot_*.pdf')
+        for f in glob.glob(pattern):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+        self._history = []
+        self._history_pointer = -1
+
+    def _save_snapshot(self):
+        """
+        Save the current PDF state to the history stack.
+        Called BEFORE each edit so we can restore it later.
+
+        Linear model:
+            _history = [state_0, state_1, ..., state_N]
+            _history_pointer points to the last saved state.
+            The live file on disk is always the "current unsaved" state.
+        """
+        filepath = self.current_file_path
+        if not filepath or not os.path.exists(filepath):
+            return
+
+        # If pointer is not at the end, discard forward history (redo states)
+        discard_from = self._history_pointer + 1
+        if discard_from < len(self._history):
+            for path in self._history[discard_from:]:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except OSError:
+                    pass
+            self._history = self._history[:discard_from]
+
+        # Save a copy of the current file
+        idx = len(self._history)
+        snapshot_path = os.path.join(self.upload_dir, f'snapshot_{idx:04d}.pdf')
+        shutil.copy2(filepath, snapshot_path)
+        self._history.append(snapshot_path)
+        self._history_pointer = len(self._history) - 1
+
+        # Enforce max history
+        if len(self._history) > self.MAX_HISTORY:
+            oldest = self._history.pop(0)
+            try:
+                if os.path.exists(oldest):
+                    os.remove(oldest)
+            except OSError:
+                pass
+            self._history_pointer = len(self._history) - 1
+
+    def undo(self):
+        """
+        Undo the last edit.
+
+        On first undo from the tip, we save the current (modified) file
+        as one more snapshot so redo can restore it.
+        Then we copy the snapshot at pointer back to the live file
+        and decrement the pointer.
+        """
+        if self._history_pointer < 0 or len(self._history) == 0:
+            raise ValueError("Nothing to undo")
+
+        filepath = self.current_file_path
+        if not filepath:
+            raise FileNotFoundError("No PDF file loaded")
+
+        # If we're at the tip, push the current live file so redo can reach it
+        if self._history_pointer == len(self._history) - 1:
+            idx = len(self._history)
+            tip_path = os.path.join(self.upload_dir, f'snapshot_{idx:04d}.pdf')
+            shutil.copy2(filepath, tip_path)
+            self._history.append(tip_path)
+            # Don't move pointer — it still points to the pre-edit state
+
+        # Restore the state at pointer
+        snapshot = self._history[self._history_pointer]
+        if not os.path.exists(snapshot):
+            raise ValueError("Snapshot file missing, cannot undo")
+        shutil.copy2(snapshot, filepath)
+
+        self._history_pointer -= 1
+
+        return self.get_history_status()
+
+    def redo(self):
+        """
+        Redo a previously undone edit — move pointer forward and restore.
+        """
+        # pointer + 2 because: pointer is one below the state we just restored,
+        # and the next forward state is two ahead.
+        # Actually let's think simply: after undo, pointer went from P to P-1.
+        # File was restored to history[P]. So history[P+1] is the next state.
+        # But pointer is P-1 now, so next = pointer + 2.
+        next_idx = self._history_pointer + 2
+
+        if next_idx >= len(self._history):
+            raise ValueError("Nothing to redo")
+
+        filepath = self.current_file_path
+        if not filepath:
+            raise FileNotFoundError("No PDF file loaded")
+
+        snapshot = self._history[next_idx]
+        if not os.path.exists(snapshot):
+            raise ValueError("Snapshot file missing, cannot redo")
+
+        shutil.copy2(snapshot, filepath)
+        self._history_pointer = next_idx - 1  # pointer sits below the restored state
+
+        return self.get_history_status()
+
+    def get_history_status(self):
+        """Return the current undo/redo availability."""
+        can_undo = self._history_pointer >= 0
+        can_redo = (self._history_pointer + 2) < len(self._history)
+        return {
+            'status': 'success',
+            'can_undo': can_undo,
+            'can_redo': can_redo,
+            'history_position': self._history_pointer,
+            'history_size': len(self._history),
+        }
 
     # ── helpers ────────────────────────────────────────────────────
 
@@ -378,6 +528,9 @@ class PDFService:
                 is_bold = bool(props["flags"] & (1 << 4))
                 is_italic = bool(props["flags"] & (1 << 1))
                 props["font"] = _resolve_fontname(hint_font, is_bold, is_italic)
+
+            # ── Step 1.5: Save snapshot for undo BEFORE modifying ─
+            self._save_snapshot()
 
             # ── Step 2: Detect background color & redact ─────────
             bg_color = self._detect_background_color(page, target_rect)

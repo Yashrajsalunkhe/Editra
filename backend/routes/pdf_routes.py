@@ -2,8 +2,11 @@
 pdf_routes.py - API route handlers for PDF operations
 
 Endpoints:
-- POST /upload  - Upload a PDF file
-- POST /edit    - Edit text in the PDF
+- POST /upload   - Upload a PDF file
+- POST /edit     - Edit text in the PDF
+- POST /undo     - Undo the last edit
+- POST /redo     - Redo an undone edit
+- GET  /history  - Get undo/redo state
 - GET  /download - Download the modified PDF
 """
 
@@ -113,6 +116,8 @@ def edit_pdf():
             hint_size=hint_size,
             hint_color=hint_color,
         )
+        # Include undo/redo state in the response
+        result.update(pdf_service.get_history_status())
         return jsonify(result), 200
 
     except FileNotFoundError as e:
@@ -121,6 +126,63 @@ def edit_pdf():
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': f'Edit failed: {str(e)}'}), 500
+
+
+@pdf_bp.route('/undo', methods=['POST'])
+def undo():
+    """
+    Undo the last edit.
+
+    Returns:
+        200: { status, can_undo, can_redo }
+        400: { error } if nothing to undo
+        404: { error } if no PDF loaded
+    """
+    try:
+        result = pdf_service.undo()
+        return jsonify(result), 200
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Undo failed: {str(e)}'}), 500
+
+
+@pdf_bp.route('/redo', methods=['POST'])
+def redo():
+    """
+    Redo a previously undone edit.
+
+    Returns:
+        200: { status, can_undo, can_redo }
+        400: { error } if nothing to redo
+        404: { error } if no PDF loaded
+    """
+    try:
+        result = pdf_service.redo()
+        return jsonify(result), 200
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Redo failed: {str(e)}'}), 500
+
+
+@pdf_bp.route('/history', methods=['GET'])
+def history_status():
+    """
+    Get the current undo/redo state.
+
+    Returns:
+        200: { can_undo, can_redo, history_position, history_size }
+    """
+    try:
+        result = pdf_service.get_history_status()
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @pdf_bp.route('/page_data/<int:page_num>', methods=['GET'])
@@ -161,3 +223,4 @@ def download_pdf():
         return jsonify({'error': str(e)}), 404
     except Exception as e:
         return jsonify({'error': f'Download failed: {str(e)}'}), 500
+
