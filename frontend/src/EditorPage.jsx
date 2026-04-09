@@ -14,7 +14,7 @@ function EditorPage() {
   // ── Fetch initial history state ─────────────────────────────
   const fetchHistoryStatus = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:5000/history');
+      const res = await fetch('/api/history');
       if (res.ok) {
         const data = await res.json();
         setCanUndo(data.can_undo);
@@ -35,7 +35,7 @@ function EditorPage() {
     setIsProcessing(true);
 
     try {
-      const response = await fetch('http://localhost:5000/edit', {
+      const response = await fetch('/api/edit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editData),
@@ -66,7 +66,7 @@ function EditorPage() {
     setIsProcessing(true);
 
     try {
-      const res = await fetch('http://localhost:5000/undo', { method: 'POST' });
+      const res = await fetch('/api/undo', { method: 'POST' });
       const data = await res.json();
 
       if (res.ok) {
@@ -91,7 +91,7 @@ function EditorPage() {
     setIsProcessing(true);
 
     try {
-      const res = await fetch('http://localhost:5000/redo', { method: 'POST' });
+      const res = await fetch('/api/redo', { method: 'POST' });
       const data = await res.json();
 
       if (res.ok) {
@@ -129,7 +129,7 @@ function EditorPage() {
   }, [handleUndo, handleRedo]);
 
   const handleDownload = () => {
-    window.open('http://localhost:5000/download', '_blank');
+    window.open('/api/download', '_blank');
   };
 
   return (
