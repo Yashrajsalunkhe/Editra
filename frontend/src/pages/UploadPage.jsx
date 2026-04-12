@@ -26,7 +26,15 @@ function UploadPage() {
         method: 'POST',
         body: formData,
       });
-      const data = await response.json();
+
+      // Handle both JSON and plain-text/HTML error responses from proxies.
+      const rawBody = await response.text();
+      let data = {};
+      try {
+        data = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        data = { error: rawBody || `Request failed with status ${response.status}` };
+      }
       
       if (response.ok) {
         setUploadStatus(`SYNC_SUCCESS: ${file.name}`);
@@ -34,7 +42,7 @@ function UploadPage() {
         // Go straight to editor
         navigate('/editor', { state: { timestamp } });
       } else {
-        setUploadStatus(`SYNC_ERROR: ${data.error}`);
+        setUploadStatus(`SYNC_ERROR: ${data.error || `HTTP_${response.status}`}`);
       }
     } catch (err) {
       setUploadStatus(`FATAL: BACKEND_UNREACHABLE`);

@@ -1,12 +1,28 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: editra-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    # Limit memory to 50MB (more than enough for page caching)
+    command: redis-server --maxmemory 50mb --maxmemory-policy allkeys-lru
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: editra-backend
     restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080
     volumes:
       - ./backend/uploads:/app/uploads:Z
+    ports:
+      - "5000:5000"
     expose:
       - "5000"
 
@@ -18,5 +34,7 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      - BACKEND_URL=http://backend:5000
     ports:
       - "8080:80"

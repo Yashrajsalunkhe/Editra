@@ -19,10 +19,14 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/page_data/${page}`);
+      // Cache-busting param ensures fresh data after edits
+      const response = await fetch(`/api/page_data/${page}?t=${pdfTimestamp}`);
       const data = await response.json();
       if (response.ok) {
         setPageData(data);
+        // Preload adjacent pages in background for instant navigation
+        preloadPage(page - 1, data.page_count);
+        preloadPage(page + 1, data.page_count);
       } else {
         setPageData(null);
         setError(data.error || 'Unable to load PDF page');
@@ -33,6 +37,13 @@ const InteractivePdfViewer = ({ pdfTimestamp, onEdit }) => {
       setError('Unable to reach backend service');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Preload a page in background (fires fetch, browser caches the response)
+  const preloadPage = (page, totalPages) => {
+    if (page >= 1 && page <= totalPages) {
+      fetch(`/api/page_data/${page}?t=${pdfTimestamp}`).catch(() => {});
     }
   };
 

@@ -10,14 +10,26 @@ Endpoints:
 - GET  /download - Download the modified PDF
 """
 
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
 from services.pdf_service import PDFService
 
 # Create blueprint for PDF routes
 pdf_bp = Blueprint('pdf', __name__)
 
-# Initialize PDF service (shared instance)
-pdf_service = PDFService(upload_dir='uploads')
+# ── Lazy-init PDF service (needs app context for cache) ──────────
+_pdf_service = None
+
+
+def _get_service() -> PDFService:
+    """
+    Get or create the PDFService singleton,
+    injecting the shared CacheService from the app config.
+    """
+    global _pdf_service
+    if _pdf_service is None:
+        cache = current_app.config.get('CACHE_SERVICE')
+        _pdf_service = PDFService(upload_dir='uploads', cache=cache)
+    return _pdf_service
 
 
 @pdf_bp.route('/upload', methods=['POST'])
@@ -46,6 +58,7 @@ def upload_pdf():
         return jsonify({'error': 'Only PDF files are accepted'}), 400
 
     try:
+        pdf_service = _get_service()
         filename = pdf_service.save_upload(file)
         return jsonify({
             'message': 'PDF uploaded successfully',
@@ -110,6 +123,7 @@ def edit_pdf():
         return jsonify({'error': 'new_text cannot be empty'}), 400
 
     try:
+        pdf_service = _get_service()
         result = pdf_service.edit_text(
             page, old_text, new_text, x, y,
             hint_font=hint_font,
@@ -139,6 +153,7 @@ def undo():
         404: { error } if no PDF loaded
     """
     try:
+        pdf_service = _get_service()
         result = pdf_service.undo()
         return jsonify(result), 200
     except FileNotFoundError as e:
@@ -160,6 +175,7 @@ def redo():
         404: { error } if no PDF loaded
     """
     try:
+        pdf_service = _get_service()
         result = pdf_service.redo()
         return jsonify(result), 200
     except FileNotFoundError as e:
@@ -179,6 +195,7 @@ def history_status():
         200: { can_undo, can_redo, history_position, history_size }
     """
     try:
+        pdf_service = _get_service()
         result = pdf_service.get_history_status()
         return jsonify(result), 200
     except Exception as e:
@@ -189,10 +206,18 @@ def history_status():
 def get_page_data(page_num):
     """
     Get image and text block data for a specific page.
+    Cache headers are set for browser-side caching.
     """
     try:
+        pdf_service = _get_service()
         result = pdf_service.get_page_data(page_num)
-        return jsonify(result), 200
+
+        response = jsonify(result)
+        # Allow browser to cache for 60s (page will be
+        # re-fetched via timestamp query param after edits)
+        response.headers['Cache-Control'] = 'private, max-age=60'
+        return response, 200
+
     except FileNotFoundError as e:
         return jsonify({'error': str(e)}), 404
     except ValueError as e:
@@ -211,6 +236,7 @@ def download_pdf():
         404: { error } if no PDF available
     """
     try:
+        pdf_service = _get_service()
         filepath = pdf_service.get_download_path()
         return send_file(
             filepath,
@@ -223,4 +249,3 @@ def download_pdf():
         return jsonify({'error': str(e)}), 404
     except Exception as e:
         return jsonify({'error': f'Download failed: {str(e)}'}), 500
-

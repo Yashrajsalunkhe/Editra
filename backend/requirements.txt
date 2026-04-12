@@ -2,3 +2,5 @@ Flask==3.0.*
 Flask-Cors==4.0.*
 PyMuPDF==1.23.*
 gunicorn==22.0.*
+redis==5.0.*
+flask-compress==1.15.*
